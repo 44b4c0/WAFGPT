@@ -9,12 +9,11 @@ import pyarrow as pa
 import urllib.parse
 import ipaddress
 import hashlib
-import base64
 import html
 import re
 import os
 
-from config import PCAP_IN_DIR, BAD_PCAP_OUT_PATH, TXT_IN_DIR, GOOD_PCAP_OUT_PATH, SUSP_PCAP_OUT_PATH
+from config import PCAP_IN_DIR, BAD_PCAP_OUT_PATH, TXT_IN_DIR, GOOD_PCAP_OUT_PATH, SUSP_PCAP_OUT_PATH, CSV_IN_DIR
 
 def DetectAttacks(data, url=None):
     FLAGS = re.IGNORECASE
@@ -73,7 +72,7 @@ def DetectAttacks(data, url=None):
     elif open_redirect_re.search(data) or open_redirect_re.search(url):
         return 1
     elif multipart_file_re.search(data) or multipart_file_re.search(url):
-        return -1
+        return 2
     elif shell_cmds_re.search(data) or shell_cmds_re.search(url):
         return 1
     else:
@@ -97,23 +96,31 @@ def PcapSplit():
 
     txt_dir = Path(TXT_IN_DIR)
     pcap_dir = Path(PCAP_IN_DIR)
+    csv_dir = Path(CSV_IN_DIR)
 
-    def load_payload(pattern, target_set):
+    def load_payload_txt(pattern, target_set):
         for file in txt_dir.rglob(pattern=pattern):
             if file.is_file():
                 with open(file, 'r', encoding='utf-8', errors='ignore') as f:
                     target_set.update(line.strip() for line in f if line.strip())
+    
+    def load_payload_csv(pattern, target_set):
+        for file in csv_dir.rglob(pattern=pattern):
+            if file.is_file():
+                with open(file, 'r', encoding='utf-8', errors='ignore') as f:
+                    target_set.update(line.strip() for line in f if line.strip())
 
-    load_payload('xsspayload-*', xss_payloads)
-    load_payload('sqlipayload-*', sqli_payloads)
-    load_payload('maldomain-*', bad_domains)
-    load_payload('cmdipayload-*', cmdi_payloads)
-    load_payload('pathpayload-*', pathtrav_payloads)
-    load_payload('xxepayload-*', xxe_payloads)
-    load_payload('inclusionpayload-*', inclusion_payloads)
-    load_payload('ldappayload-*', ldap_payloads)
-    load_payload('openredirect-*', openredirect_payloads)
-    load_payload('hashpayload-*', bad_hashes)
+    load_payload_txt('xsspayload-*', xss_payloads)
+    load_payload_txt('sqlipayload-*', sqli_payloads)
+    load_payload_txt('maldomain-*', bad_domains)
+    load_payload_txt('cmdipayload-*', cmdi_payloads)
+    load_payload_txt('pathpayload-*', pathtrav_payloads)
+    load_payload_txt('xxepayload-*', xxe_payloads)
+    load_payload_txt('inclusionpayload-*', inclusion_payloads)
+    load_payload_txt('ldappayload-*', ldap_payloads)
+    load_payload_txt('openredirect-*', openredirect_payloads)
+    load_payload_txt('hashpayload-*', bad_hashes)
+    load_payload_csv('malip-*', bad_ips)
 
     bad_ips = sorted(bad_ips, key=lambda ip: ipaddress.ip_address(ip))
     
@@ -160,7 +167,7 @@ def PcapSplit():
                         if DetectAttacks(body, url=url) == 1:
                             wrpcap(BAD_PCAP_OUT_PATH, pkt=pkt, append=True)
                             continue
-                        elif DetectAttacks(body, url=url) == -1:
+                        elif DetectAttacks(body, url=url) == 2:
                             wrpcap(BAD_PCAP_OUT_PATH, pkt=pkt, append=True)
                             continue
                         elif DetectAttacks(body, url=url) == 0:

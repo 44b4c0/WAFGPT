@@ -13,7 +13,7 @@ import base64
 import torch
 import os
 
-from config import PCAP_GUESS_IN_DIR, EPOCH_NUMS, MODEL_OUT_PATH, VECTORIZER_OUT_PATH
+from config import PCAP_GUESS_IN_DIR, EPOCH_NUMS, MODEL_OUT_PATH, VECTORIZER_OUT_PATH, API_PCAP_FILE_UPLOAD_DIR
 from modules.dataparser import PcapToDataFrame
 
 def LoadParquet(file, label):
@@ -118,7 +118,7 @@ def TrainModel(concatinated):
     joblib.dump(vectorizer, VECTORIZER_OUT_PATH)
 
 # Loading model
-def LoadModel():
+def LoadModel(mode):
     vectorizer = joblib.load(VECTORIZER_OUT_PATH)
 
     input_dim = len(vectorizer.get_feature_names_out())
@@ -130,7 +130,12 @@ def LoadModel():
     model.to(device)
     model.eval()
 
-    pcap_in_dir = Path(PCAP_GUESS_IN_DIR)
+    pcap_in_dir = None
+
+    if mode == 'api':
+        pcap_in_dir = Path(API_PCAP_FILE_UPLOAD_DIR)
+    else:
+        pcap_in_dir = Path(PCAP_GUESS_IN_DIR)
 
     loaded_dfs = []
 
@@ -163,4 +168,4 @@ def LoadModel():
     else:
         print('Bad: 0 packets, Suspicious: 0 packets')
     
-    return results
+    return results.to_json(orient='records')
